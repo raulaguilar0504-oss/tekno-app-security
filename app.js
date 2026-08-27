@@ -7,7 +7,7 @@
     view: "home",
     params: {},
     authMode: "login",
-    checkinMode: "qr",
+    checkinMode: "manual",
     stopScan: null,
     geo: null,
   };
@@ -486,7 +486,10 @@
     if (!t) return;
     const action = t.dataset.action;
     if (action === "nav") {
-      state.checkinMode = t.dataset.view === "foto" ? "manual" : "qr";
+      // El modo manual ("Entrada provisional") es el que sirve mientras no haya
+      // lectores QR instalados en los accesos, así que es el modo por defecto
+      // y se mantiene fijo entre pantallas hasta que el guardia elija "Escanear QR".
+      if (t.dataset.view === "foto") state.checkinMode = "manual";
       await goto(t.dataset.view, { id: t.dataset.id, type: t.dataset.type });
     } else if (action === "logout") {
       cleanupCamera();
