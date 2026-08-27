@@ -99,6 +99,7 @@
           <button class="action-btn" data-action="nav" data-view="checkin" data-type="entrada"><span class="ic">➡️</span>Registrar entrada</button>
           <button class="action-btn" data-action="nav" data-view="checkin" data-type="salida"><span class="ic">⬅️</span>Registrar salida</button>
           <button class="action-btn" data-action="nav" data-view="rondin"><span class="ic">🔄</span>Hacer rondín</button>
+          <button class="action-btn" data-action="nav" data-view="foto"><span class="ic">📷</span>Tomar foto</button>
           <button class="action-btn" data-action="nav" data-view="incidente"><span class="ic">⚠️</span>Reportar anomalía</button>
           <button class="action-btn emergency" data-action="nav" data-view="emergencia"><span class="ic">🚨</span>Contacto de emergencia</button>
         </div>
@@ -109,6 +110,10 @@
         <div class="card">
           <h2>Mi turno hoy</h2>
           <div id="home-summary" class="small">Cargando…</div>
+        </div>
+        <div class="card">
+          <h2>Últimos movimientos</h2>
+          <div id="ultimos-movimientos" class="small">Cargando…</div>
         </div>
       </main>
       ${bottomNav("home", "guardia")}`;
@@ -152,6 +157,8 @@
         <div class="grid-actions">
           <button class="action-btn" data-action="nav" data-view="bitacora"><span class="ic">📋</span>Bitácora general</button>
           <button class="action-btn" data-action="nav" data-view="galeria"><span class="ic">🖼️</span>Galería general</button>
+          <button class="action-btn" data-action="nav" data-view="qrs"><span class="ic">🔗</span>Códigos QR</button>
+          <button class="action-btn" data-action="nav" data-view="mensajes"><span class="ic">💬</span>Chat de guardias</button>
         </div>
       </main>
       ${bottomNav("home", "jefe_seguridad")}`;
@@ -201,6 +208,39 @@
           }
         </div>
       </main>`;
+  }
+
+  function qrsAllView(parks) {
+    return `
+      ${topbar("Códigos QR")}
+      <main>
+        ${
+          parks.length
+            ? parks
+                .map(
+                  (p) => `
+          <div class="card">
+            <h2>${esc(p.name)}</h2>
+            ${
+              (p.access_points || []).length
+                ? p.access_points
+                    .map(
+                      (ap) => `
+              <div class="park-list-item">
+                <div>${esc(ap.name)}</div>
+                <button class="btn secondary" style="width:auto" data-action="show-qr" data-token="${esc(ap.qr_token)}" data-name="${esc(p.name + " - " + ap.name)}">Ver QR</button>
+              </div>`
+                    )
+                    .join("")
+                : `<div class="empty">Sin puntos de acceso — agrégalos desde el detalle del parque.</div>`
+            }
+          </div>`
+                )
+                .join("")
+            : `<div class="empty">Aún no hay parques.</div>`
+        }
+      </main>
+      ${bottomNav("home", "jefe_seguridad")}`;
   }
 
   function qrModal(token, name) {
@@ -361,7 +401,7 @@
   }
 
   window.Views = {
-    esc, fmtDT, topbar, bottomNav, loginView, guardHome, jefeHome, parkDetail, qrModal,
+    esc, fmtDT, topbar, bottomNav, loginView, guardHome, jefeHome, parkDetail, qrModal, qrsAllView,
     cameraScreen, bitacoraView, galeriaView, chatView, emergenciaView, incidenteView, perfilView, feedItem,
   };
 })();

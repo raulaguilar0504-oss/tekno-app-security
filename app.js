@@ -112,6 +112,22 @@
         await setupCameraScreen();
         break;
       }
+      case "foto": {
+        root.innerHTML = V.cameraScreen({ title: "Tomar foto", mode: "manual", allowQr: false });
+        await setupCameraScreen();
+        break;
+      }
+      case "qrs": {
+        const { data: parks } = await window.SB.sb.from("parks").select("*").order("name");
+        const withAps = await Promise.all(
+          (parks || []).map(async (pk) => {
+            const { data: aps } = await window.SB.sb.from("access_points").select("*").eq("park_id", pk.id).order("created_at");
+            return { ...pk, access_points: aps || [] };
+          })
+        );
+        root.innerHTML = V.qrsAllView(withAps);
+        break;
+      }
       case "emergencia":
         root.innerHTML = V.emergenciaView(p.parks, state.params.sent);
         break;
@@ -168,6 +184,24 @@
           statusEl.innerHTML = `<span style="color:var(--good)">✅ Último rondín hace ${minsAgo} min. Próximo en ${60 - minsAgo} min.</span>`;
         }
       }
+    }
+
+    const movEl = document.getElementById("ultimos-movimientos");
+    if (movEl) {
+      const [{ data: e2 }, { data: r2 }, { data: i2 }] = await Promise.all([
+        window.SB.sb.from("entries_exits").select("*").eq("guard_id", p.id).order("created_at", { ascending: false }).limit(5),
+        window.SB.sb.from("rounds").select("*").eq("guard_id", p.id).order("created_at", { ascending: false }).limit(5),
+        window.SB.sb.from("incidents").select("*").eq("guard_id", p.id).order("created_at", { ascending: false }).limit(5),
+      ]);
+      const events = []
+        .concat(
+          (e2 || []).map((e) => ({ kind: e.type, title: e.type === "entrada" ? "Entrada registrada" : "Salida registrada", method: e.method, created_at: e.created_at })),
+          (r2 || []).map((r) => ({ kind: "rondin", title: "Rondín realizado", method: r.method, created_at: r.created_at })),
+          (i2 || []).map((i) => ({ kind: "incidente", title: "Anomalía: " + i.description, created_at: i.created_at }))
+        )
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, 5);
+      movEl.innerHTML = events.length ? events.map(V.feedItem).join("") : `<div class="empty">Sin movimientos todavía.</div>`;
     }
   }
 
@@ -347,20 +381,29 @@
     ];
     const canvas = window.Camera.captureFrame(video, lines);
     const hash = window.PhotoHash.aHashFromCanvas(canvas);
+    const isFreePhoto = state.view === "foto";
 
-    const recent = await window.SB.recentPhotoHashes(p.id, 15);
-    const tooSimilar = recent.some((h) => window.PhotoHash.hammingDistanceHex(hash, h) < 6);
-    if (tooSimilar) {
-      document.getElementById("capture-result").innerHTML =
-        `<div class="error-banner">Esta foto se parece demasiado a una anterior. Debes tomar una foto nueva en este momento (no repitas la misma imagen).</div>`;
-      return;
+    if (!isFreePhoto) {
+      const recent = await window.SB.recentPhotoHashes(p.id, 15);
+      const tooSimilar = recent.some((h) => window.PhotoHash.hammingDistanceHex(hash, h) < 6);
+      if (tooSimilar) {
+        document.getElementById("capture-result").innerHTML =
+          `<div class="error-banner">Esta foto se parece demasiado a una anterior. Debes tomar una foto nueva en este momento (no repitas la misma imagen).</div>`;
+        return;
+      }
     }
 
     document.getElementById("btn-capture").disabled = true;
     document.getElementById("capture-result").innerHTML = `<div class="small">Subiendo foto…</div>`;
 
+    const context = isFreePhoto
+      ? "otro"
+      : state.view === "rondin"
+      ? "rondin"
+      : state.params.type === "salida"
+      ? "salida"
+      : "entrada";
     const blob = await window.Camera.canvasToBlob(canvas);
-    const context = state.view === "rondin" ? "rondin" : state.params.type === "salida" ? "salida" : "entrada";
     const { path, error: upErr } = await window.SB.uploadPhoto({ blob, context });
     if (upErr) {
       document.getElementById("capture-result").innerHTML = `<div class="error-banner">Error al subir la foto: ${upErr.message}</div>`;
@@ -372,6 +415,11 @@
     });
     if (rowErr) {
       document.getElementById("capture-result").innerHTML = `<div class="error-banner">${rowErr.message}</div>`;
+      return;
+    }
+    if (isFreePhoto) {
+      toast("Foto guardada en la galería ✅");
+      goto("galeria");
       return;
     }
     await finalizeCheck({ method: "manual", accessPointId: null, photoId: photoRow.id });
@@ -404,7 +452,7 @@
     if (!t) return;
     const action = t.dataset.action;
     if (action === "nav") {
-      state.checkinMode = "qr";
+      state.checkinMode = t.dataset.view === "foto" ? "manual" : "qr";
       await goto(t.dataset.view, { id: t.dataset.id, type: t.dataset.type });
     } else if (action === "logout") {
       cleanupCamera();
