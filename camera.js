@@ -4,12 +4,36 @@
 
   async function start(videoEl, facingMode = "environment") {
     stop();
-    currentStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 720 }, height: { ideal: 960 } },
-      audio: false,
-    });
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const err = new Error("Este navegador no permite acceder a la cámara. Usa Chrome o Safari actualizados.");
+      err.code = "UNSUPPORTED";
+      throw err;
+    }
+    // Pequeña pausa para que el navegador libere por completo la cámara
+    // de un stream anterior antes de pedir uno nuevo (evita NotReadableError).
+    await new Promise((r) => setTimeout(r, 120));
+    try {
+      currentStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 720 }, height: { ideal: 960 } },
+        audio: false,
+      });
+    } catch (e1) {
+      // Reintento con restricciones mínimas: cubre laptops sin cámara trasera,
+      // navegadores que no soportan facingMode, o cámara ocupada momentáneamente.
+      try {
+        currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } catch (e2) {
+        e2.code = e1.name === "NotAllowedError" || e2.name === "NotAllowedError" ? "DENIED" : e2.name;
+        throw e2;
+      }
+    }
     videoEl.srcObject = currentStream;
-    await videoEl.play();
+    try {
+      await videoEl.play();
+    } catch (_) {
+      // Algunos navegadores requieren un toque del usuario; el <video muted playsinline>
+      // ya cubre la mayoría de los casos, pero no dejamos que esto tumbe el flujo.
+    }
     return currentStream;
   }
 

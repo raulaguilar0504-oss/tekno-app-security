@@ -293,11 +293,27 @@
       </div>`;
   }
 
-  function bitacoraView(events, parkFilterHtml, role) {
+  function bitacoraView(events, filter, role) {
+    const f = filter || "todo";
+    const filters = [
+      { key: "todo", label: "Todo" },
+      { key: "entradas_salidas", label: "Entradas/Salidas" },
+      { key: "rondines", label: "Rondines" },
+      { key: "incidentes", label: "Incidentes" },
+      { key: "emergencias", label: "Emergencias" },
+    ];
     return `
       ${topbar("Bitácora")}
       <main>
-        ${parkFilterHtml || ""}
+        <div class="card" style="display:flex;gap:8px;flex-wrap:wrap;padding:10px">
+          ${filters
+            .map(
+              (x) => `
+            <button class="btn ${f === x.key ? "" : "secondary"}" style="width:auto;padding:8px 12px;font-size:13px"
+              data-action="bitacora-filter" data-filter="${x.key}">${x.label}</button>`
+            )
+            .join("")}
+        </div>
         <div class="card">
           ${events.length ? events.map(feedItem).join("") : `<div class="empty">Sin actividad todavía.</div>`}
         </div>

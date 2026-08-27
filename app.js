@@ -206,14 +206,11 @@
   }
 
   // ---------------- BITÁCORA ----------------
+  let bitacoraCache = [];
   async function renderBitacora() {
     const p = state.profile;
     const isJefe = p.role === "jefe_seguridad";
     const scope = isJefe ? {} : { guard_id: p.id };
-
-    async function withNames(rows, table) {
-      return rows || [];
-    }
 
     const [{ data: entries }, { data: rounds }, { data: incidents }, { data: alerts }] = await Promise.all([
       applyScope(window.SB.sb.from("entries_exits").select("*, profiles:guard_id(full_name), parks:park_id(name)"), scope),
@@ -243,7 +240,22 @@
       )
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    root.innerHTML = V.bitacoraView(events, null, p.role);
+    bitacoraCache = events;
+    renderBitacoraFiltered();
+  }
+
+  function renderBitacoraFiltered() {
+    const p = state.profile;
+    const filter = state.params.bitFilter || "todo";
+    const groups = {
+      todo: () => true,
+      entradas_salidas: (ev) => ev.kind === "entrada" || ev.kind === "salida",
+      rondines: (ev) => ev.kind === "rondin",
+      incidentes: (ev) => ev.kind === "incidente",
+      emergencias: (ev) => ev.kind === "emergencia",
+    };
+    const filtered = bitacoraCache.filter(groups[filter] || groups.todo);
+    root.innerHTML = V.bitacoraView(filtered, filter, p.role);
   }
 
   function applyScope(query, scope) {
@@ -330,13 +342,35 @@
   }
 
   // ---------------- CÁMARA / CHECK-IN / RONDÍN ----------------
+  function cameraErrorMessage(e) {
+    const name = e && (e.code || e.name);
+    if (name === "NotAllowedError" || name === "DENIED" || name === "PermissionDeniedError") {
+      return "Bloqueaste el acceso a la cámara para esta página. Ábrela en el ícono 🔒 junto a la dirección del navegador y permite el acceso a la Cámara, luego toca \"Reintentar\".";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "No se encontró ninguna cámara en este dispositivo.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return "La cámara está siendo usada por otra app. Cierra otras apps/pestañas que la estén usando e intenta de nuevo.";
+    }
+    if (name === "UNSUPPORTED") {
+      return e.message;
+    }
+    return "No se pudo acceder a la cámara" + (e && e.message ? `: ${e.message}` : ".") + " Verifica los permisos de tu navegador e intenta de nuevo.";
+  }
+
   async function setupCameraScreen() {
     const video = document.getElementById("cam-video");
     if (!video) return;
+    const statusEl = document.getElementById("camera-status");
+    if (statusEl) statusEl.innerHTML = "";
     try {
       await window.Camera.start(video);
     } catch (e) {
-      document.getElementById("camera-status").innerHTML = `<div class="error-banner">No se pudo acceder a la cámara: ${e.message}</div>`;
+      if (statusEl) {
+        statusEl.innerHTML = `<div class="error-banner">${cameraErrorMessage(e)}</div><button class="btn secondary" id="btn-retry-camera" style="margin-bottom:10px">🔄 Reintentar</button>`;
+        document.getElementById("btn-retry-camera")?.addEventListener("click", () => setupCameraScreen());
+      }
       return;
     }
     state.geo = await window.Camera.getGeolocation();
@@ -477,6 +511,9 @@
       a.click();
     } else if (action === "close-modal") {
       document.getElementById("qr-modal-overlay")?.remove();
+    } else if (action === "bitacora-filter") {
+      state.params.bitFilter = t.dataset.filter;
+      renderBitacoraFiltered();
     } else if (action === "toggle-guard") {
       const newActive = t.dataset.active !== "1";
       const { error } = await window.SB.sb.from("profiles").update({ active: newActive }).eq("id", t.dataset.id);
