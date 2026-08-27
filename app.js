@@ -148,6 +148,27 @@
     const entradas = (entries || []).filter((e) => e.type === "entrada").length;
     const salidas = (entries || []).filter((e) => e.type === "salida").length;
     el.innerHTML = `Entradas hoy: <b>${entradas}</b> · Salidas hoy: <b>${salidas}</b> · Rondines hoy: <b>${(rounds || []).length}</b>`;
+
+    const statusEl = document.getElementById("rondin-status");
+    if (statusEl) {
+      const { data: lastRound } = await window.SB.sb
+        .from("rounds")
+        .select("created_at")
+        .eq("guard_id", p.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!lastRound) {
+        statusEl.innerHTML = `<span style="color:var(--warn)">⏰ Aún no registras ningún rondín — hazlo cuando empieces tu turno.</span>`;
+      } else {
+        const minsAgo = Math.round((Date.now() - new Date(lastRound.created_at).getTime()) / 60000);
+        if (minsAgo >= 60) {
+          statusEl.innerHTML = `<span style="color:var(--bad)">🔴 Han pasado ${minsAgo} min desde tu último rondín — te toca hacer uno ahora.</span>`;
+        } else {
+          statusEl.innerHTML = `<span style="color:var(--good)">✅ Último rondín hace ${minsAgo} min. Próximo en ${60 - minsAgo} min.</span>`;
+        }
+      }
+    }
   }
 
   // ---------------- BITÁCORA ----------------
@@ -188,7 +209,7 @@
       )
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-    root.innerHTML = V.bitacoraView(events);
+    root.innerHTML = V.bitacoraView(events, null, p.role);
   }
 
   function applyScope(query, scope) {
@@ -206,7 +227,7 @@
     const withUrls = await Promise.all(
       (photos || []).map(async (ph) => ({ ...ph, url: await window.SB.signedUrl(ph.storage_path) }))
     );
-    root.innerHTML = V.galeriaView(withUrls.filter((p) => p.url));
+    root.innerHTML = V.galeriaView(withUrls.filter((p) => p.url), p.role);
   }
 
   // ---------------- CHAT ----------------
@@ -239,7 +260,7 @@
   async function renderChatBody(parkId, selectorHtml) {
     const p = state.profile;
     if (!parkId) {
-      root.innerHTML = `${V.topbar("Guardias — chat")}<main>${selectorHtml}<div class="empty">No hay parque seleccionado.</div></main>`;
+      root.innerHTML = `${V.topbar("Guardias — chat")}<main>${selectorHtml}<div class="empty">No hay parque seleccionado.</div></main>${V.bottomNav("mensajes", p.role)}`;
       return;
     }
     const { data: msgs } = await window.SB.sb
@@ -249,7 +270,7 @@
       .order("created_at", { ascending: true })
       .limit(200);
     const withNames = (msgs || []).map((m) => ({ ...m, senderName: m.profiles?.full_name }));
-    root.innerHTML = V.chatView(withNames, p.id, selectorHtml);
+    root.innerHTML = V.chatView(withNames, p.id, selectorHtml, p.role);
     const scrollEl = document.getElementById("chat-scroll");
     if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
 
@@ -408,6 +429,12 @@
       a.click();
     } else if (action === "close-modal") {
       document.getElementById("qr-modal-overlay")?.remove();
+    } else if (action === "toggle-guard") {
+      const newActive = t.dataset.active !== "1";
+      const { error } = await window.SB.sb.from("profiles").update({ active: newActive }).eq("id", t.dataset.id);
+      if (error) return toast(error.message, "error");
+      toast(newActive ? "Guardia activado ✅" : "Guardia desactivado");
+      render();
     } else if (t.id === "btn-send-emergency") {
       const geo = await window.Camera.getGeolocation();
       const p = state.profile;

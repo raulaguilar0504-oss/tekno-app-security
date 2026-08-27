@@ -102,6 +102,10 @@
           <button class="action-btn" data-action="nav" data-view="incidente"><span class="ic">⚠️</span>Reportar anomalía</button>
           <button class="action-btn emergency" data-action="nav" data-view="emergencia"><span class="ic">🚨</span>Contacto de emergencia</button>
         </div>
+        <div class="card" id="rondin-status-card">
+          <h2>Rondín</h2>
+          <div id="rondin-status" class="small">Cargando…</div>
+        </div>
         <div class="card">
           <h2>Mi turno hoy</h2>
           <div id="home-summary" class="small">Cargando…</div>
@@ -184,7 +188,13 @@
             guards.length
               ? guards
                   .map(
-                    (g) => `<div class="park-list-item"><div>${esc(g.full_name)}<div class="small">${g.active ? "Activo" : "Desactivado"}</div></div></div>`
+                    (g) => `
+            <div class="park-list-item">
+              <div>${esc(g.full_name)}<div class="small">${g.active ? "Activo" : "Desactivado"}</div></div>
+              <button class="btn ${g.active ? "danger" : "secondary"}" style="width:auto" data-action="toggle-guard" data-id="${g.id}" data-active="${g.active ? "1" : "0"}">
+                ${g.active ? "Desactivar" : "Activar"}
+              </button>
+            </div>`
                   )
                   .join("")
               : `<div class="empty">Comparte el código <b>${esc(park.guard_invite_code)}</b> con tus guardias para que se registren.</div>`
@@ -243,7 +253,7 @@
       </div>`;
   }
 
-  function bitacoraView(events, parkFilterHtml) {
+  function bitacoraView(events, parkFilterHtml, role) {
     return `
       ${topbar("Bitácora")}
       <main>
@@ -251,10 +261,11 @@
         <div class="card">
           ${events.length ? events.map(feedItem).join("") : `<div class="empty">Sin actividad todavía.</div>`}
         </div>
-      </main>`;
+      </main>
+      ${bottomNav("bitacora", role)}`;
   }
 
-  function galeriaView(photos) {
+  function galeriaView(photos, role) {
     return `
       ${topbar("Galería de fotos")}
       <main>
@@ -265,10 +276,11 @@
               : `<div class="empty">Aún no hay fotos.</div>`
           }
         </div>
-      </main>`;
+      </main>
+      ${bottomNav("galeria", role)}`;
   }
 
-  function chatView(messages, myId, extraTopHtml) {
+  function chatView(messages, myId, extraTopHtml, role) {
     return `
       ${topbar("Guardias — chat interno")}
       <main>
@@ -290,7 +302,8 @@
             <button class="btn" type="submit">Enviar</button>
           </form>
         </div>
-      </main>`;
+      </main>
+      ${bottomNav("mensajes", role)}`;
   }
 
   function emergenciaView(park, sent) {
